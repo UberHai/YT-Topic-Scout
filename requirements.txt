@@ -1,0 +1,5 @@
+google-api-python-client==2.126.0
+youtube_transcript_api==0.6.2
+rich==13.7.1
+nltk==3.8.1
+python-dotenv>=1.0.1
