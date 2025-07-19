@@ -17,19 +17,9 @@ API_RETRY_ATTEMPTS = 3
 API_RETRY_DELAY = 1  # seconds
 
 # Load API key from config
-import json
-from pathlib import Path
+from . import config
 
-def load_config():
-    """Load configuration from config.json."""
-    config_path = Path("config.json")
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            return json.load(f)
-    return {}
-
-config = load_config()
-YT_KEY = config.get("YOUTUBE_API_KEY")
+YT_KEY = config.config.get("YOUTUBE_API_KEY")
 if not YT_KEY:
     raise RuntimeError("Put your YOUTUBE_API_KEY in config.json")
 

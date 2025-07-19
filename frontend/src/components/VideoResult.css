@@ -1,0 +1,44 @@
+.video-card {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  width: 80%;
+  max-width: 800px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  text-align: left;
+}
+
+.video-card h3 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.video-card h3 a {
+  text-decoration: none;
+  color: #007bff;
+}
+
+.video-card h3 a:hover {
+  text-decoration: underline;
+}
+
+.channel-name {
+  font-style: italic;
+  color: #555;
+  margin-bottom: 1rem;
+}
+
+.video-details h4 {
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.video-details ul {
+  padding-left: 20px;
+}
+
+.video-details ul li {
+  margin-bottom: 0.5rem;
+}
