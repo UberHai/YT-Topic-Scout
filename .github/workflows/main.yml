@@ -1,0 +1,31 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Frontend Docker image
+      run: docker build -t frontend-image ./frontend
+    - name: Build Backend Docker image
+      run: docker build -t backend-image ./backend
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Run tests
+      run: echo "No tests to run yet"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+    - name: Deploy to production
+      run: echo "Placeholder for deployment step"

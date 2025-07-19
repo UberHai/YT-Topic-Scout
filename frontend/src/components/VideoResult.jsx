@@ -1,7 +1,13 @@
 import React from 'react';
 import './VideoResult.css';
 
-const VideoResult = ({ video }) => {
+const VideoResult = ({ video, onChannelClick }) => {
+  const handleChannelClick = () => {
+    if (onChannelClick) {
+      onChannelClick(video.channel_id);
+    }
+  };
+
   return (
     <div className="video-card">
       <h3>
@@ -9,7 +15,9 @@ const VideoResult = ({ video }) => {
           {video.title}
         </a>
       </h3>
-      <p className="channel-name">{video.channel_name}</p>
+      <p className="channel-name" onClick={handleChannelClick} style={{cursor: 'pointer', textDecoration: 'underline'}}>
+        {video.channel_name}
+      </p>
       <div className="video-details">
         <h4>Summary:</h4>
         <p>{video.summary}</p>

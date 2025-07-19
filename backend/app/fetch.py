@@ -180,6 +180,53 @@ def _captions(vid: str) -> str:
         return ""
 
 
+def _fetch_comments(video_id: str, max_results: int = 100) -> List[str]:
+    """Fetches top-level comments for a given video with caching."""
+    cache_key = _get_cache_key(f"comments:{video_id}", max_results)
+    cache_file = CACHE / f"comments_{cache_key}.json"
+
+    if _is_cache_valid(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    comments = []
+    try:
+        response = _make_api_request(
+            lambda: yt.commentThreads().list(
+                part="snippet",
+                videoId=video_id,
+                textFormat="plainText",
+                maxResults=max_results,
+                order="relevance"
+            ).execute()
+        )
+
+        for item in response.get("items", []):
+            comment = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
+            comments.append(comment)
+
+    except HttpError as e:
+        # Comments can be disabled for a video
+        if e.resp.status == 403 and b'commentsDisabled' in e.content:
+            print(f"Comments are disabled for video {video_id}")
+            return []
+        raise YouTubeAPIError(f"API request failed for comments: {e}") from e
+    except Exception as e:
+        print(f"An error occurred fetching comments for {video_id}: {e}")
+        return []
+
+    try:
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(comments, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+    return comments
+
+
 def fetch_videos(query: str, max_results: int = 10) -> List[Dict]:
     """Enhanced video fetching with comprehensive caching and error handling."""
     if not query.strip():
@@ -209,6 +256,7 @@ def fetch_videos(query: str, max_results: int = 10) -> List[Dict]:
                 "channel": item["snippet"]["channelTitle"],
                 "url": f"https://www.youtube.com/watch?v={vid}",
                 "transcript": _captions(vid),
+                "comments": _fetch_comments(vid),
                 "published_at": item["snippet"].get("publishedAt", ""),
                 "duration": item.get("contentDetails", {}).get("duration", ""),
                 "view_count": item.get("statistics", {}).get("viewCount", ""),
@@ -229,3 +277,71 @@ def fetch_videos(query: str, max_results: int = 10) -> List[Dict]:
         
     except Exception as e:
         raise YouTubeAPIError(f"Failed to fetch videos: {e}")
+
+def fetch_channel_videos(channel_id: str, max_results: int = 50) -> List[Dict]:
+    """Fetches all videos from a given channel."""
+    try:
+        # 1. Get the uploads playlist ID for the channel
+        channel_response = _make_api_request(
+            lambda: yt.channels().list(
+                id=channel_id,
+                part="contentDetails"
+            ).execute()
+        )
+
+        if not channel_response.get("items"):
+            return []
+
+        playlist_id = channel_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
+        # 2. Fetch all video IDs from the uploads playlist
+        video_ids = []
+        next_page_token = None
+        while True:
+            playlist_response = _make_api_request(
+                lambda: yt.playlistItems().list(
+                    playlistId=playlist_id,
+                    part="contentDetails",
+                    maxResults=max_results,
+                    pageToken=next_page_token
+                ).execute()
+            )
+
+            video_ids.extend([item["contentDetails"]["videoId"] for item in playlist_response["items"]])
+            next_page_token = playlist_response.get("nextPageToken")
+
+            if not next_page_token:
+                break
+        
+        if not video_ids:
+            return []
+
+        # 3. Get video details for all fetched video IDs
+        items = _details(video_ids)
+        if not items:
+            return []
+
+        # 4. Format video data
+        videos = []
+        for item in items:
+            vid = item["id"]
+            # Build fresh record
+            data = {
+                "video_id": vid,
+                "title": item["snippet"]["title"],
+                "description": item["snippet"].get("description", ""),
+                "channel": item["snippet"]["channelTitle"],
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "transcript": _captions(vid),
+                "published_at": item["snippet"].get("publishedAt", ""),
+                "duration": item.get("contentDetails", {}).get("duration", ""),
+                "view_count": int(item.get("statistics", {}).get("viewCount", 0)),
+                "like_count": int(item.get("statistics", {}).get("likeCount", 0)),
+                "fetched_at": datetime.now().isoformat(),
+            }
+            videos.append(data)
+        
+        return videos
+
+    except Exception as e:
+        raise YouTubeAPIError(f"Failed to fetch channel videos: {e}")
