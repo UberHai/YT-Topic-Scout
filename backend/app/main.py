@@ -1,15 +1,23 @@
 from fastapi import FastAPI, HTTPException
 from typing import List, Optional
+from pydantic import BaseModel
 
 from . import database as db
 from . import fetch
 from . import summarizer
+from . import topic_modeler
 
 app = FastAPI(
     title="YouTube Topic-Scout API",
     description="API for searching and summarizing YouTube videos.",
     version="1.0.0",
 )
+
+# Initialize the TopicModeler
+topic_modeler_instance = topic_modeler.TopicModeler()
+
+class TopicRequest(BaseModel):
+    transcripts: List[str]
 
 @app.on_event("startup")
 async def startup_event():
@@ -54,6 +62,20 @@ async def search_videos(query: str, max_results: Optional[int] = 10):
 
     except fetch.YouTubeAPIError as e:
         raise HTTPException(status_code=500, detail=f"YouTube API error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
+
+@app.post("/api/topics")
+async def get_topics(request: TopicRequest):
+    """
+    Extract topics from a list of video transcripts.
+    """
+    if not request.transcripts:
+        raise HTTPException(status_code=400, detail="Transcripts list cannot be empty.")
+
+    try:
+        topics = topic_modeler_instance.extract_topics(request.transcripts)
+        return {"topics": topics}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
