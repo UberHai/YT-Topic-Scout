@@ -15,9 +15,12 @@ const VideoResult = ({ video, onChannelClick }) => {
           {video.title}
         </a>
       </h3>
-      <p className="channel-name" onClick={handleChannelClick} style={{cursor: 'pointer', textDecoration: 'underline'}}>
-        {video.channel_name}
+      <p className="channel-name">
+        Channel: {video.channel}
       </p>
+      <button onClick={handleChannelClick} className="analyze-channel-button">
+        Analyze Channel
+      </button>
       <div className="video-details">
         <h4>Summary:</h4>
         <p>{video.summary}</p>

@@ -1,5 +1,6 @@
 from fastapi.responses import Response
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -8,6 +9,7 @@ from . import fetch
 from . import summarizer
 from . import sentiment_analyzer
 from . import topic_modeler
+from .logger import logger
 import re
 from datetime import timedelta
 
@@ -15,6 +17,14 @@ app = FastAPI(
     title="YouTube Topic-Scout API",
     description="API for searching and summarizing YouTube videos.",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Allows the frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Initialize the TopicModeler
@@ -33,44 +43,61 @@ async def startup_event():
 async def search_videos(query: str, max_results: Optional[int] = 10):
     """
     Search for YouTube videos, store them, and return summarized results.
+    This endpoint first checks the local database for cached results.
+    If the cache is insufficient, it fetches fresh data from the YouTube API.
     """
     if not query:
         raise HTTPException(status_code=400, detail="Query parameter cannot be empty.")
 
     try:
-        # 1. Fetch fresh videos from YouTube
-        fresh_videos = fetch.fetch_videos(query, max_results=max_results)
-        if fresh_videos:
-            db.add_videos(fresh_videos)
-
-        # 2. Search the local database
+        # 1. Search the local database first
         videos = db.search(query, limit=max_results)
-        if not videos:
-            # If no cached matches, use the freshly fetched ones
-            videos = fresh_videos
+
+        # 2. If local results are insufficient, fetch from YouTube
+        if len(videos) < max_results:
+            try:
+                fresh_videos = fetch.fetch_videos(query, max_results=max_results)
+                if fresh_videos:
+                    db.add_videos(fresh_videos)
+                    # Combine and de-duplicate results
+                    existing_ids = {v['video_id'] for v in videos}
+                    new_videos = [v for v in fresh_videos if v['video_id'] not in existing_ids]
+                    videos.extend(new_videos)
+                    # Ensure we don't exceed max_results
+                    videos = videos[:max_results]
+            except fetch.YouTubeAPIError as e:
+                # If API fails but we have some cached results, we can still proceed
+                if not videos:
+                    raise HTTPException(status_code=500, detail=f"YouTube API error: {e}")
 
         # 3. Summarize the results
         results = []
         for vid in videos:
-            summary, bullets = summarizer.summarise_video(vid)
+            # Convert sqlite3.Row to a standard dictionary
+            vid_dict = dict(vid)
+            summary, bullets = summarizer.summarise_video(vid_dict)
             results.append(
                 {
-                    "title": vid["title"],
-                    "channel": vid["channel"],
-                    "url": vid["url"],
+                    "title": vid_dict["title"],
+                    "channel": vid_dict["channel"],
+                    "channel_id": vid_dict.get("channel_id"),
+                    "url": vid_dict["url"],
                     "summary": summary,
                     "talking_points": bullets,
                 }
             )
 
         # 4. Save search to history
-        db.add_search_to_history(query, results)
+        if results:
+            db.add_search_to_history(query, results)
 
         return {"query": query, "results": results}
 
     except fetch.YouTubeAPIError as e:
+        logger.error(f"YouTube API error in search_videos: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"YouTube API error: {e}")
     except Exception as e:
+        logger.error(f"An unexpected error occurred in search_videos: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
 
@@ -81,7 +108,7 @@ async def get_search_history():
     """
     try:
         history = db.get_search_history()
-        return {"history": history}
+        return history
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 

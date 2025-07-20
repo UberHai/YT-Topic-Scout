@@ -8,7 +8,13 @@ class Config:
     """Centralized configuration management."""
     
     def __init__(self, config_path: str = "config.json"):
-        self.config_path = Path(config_path)
+        # Determine the project root directory (YT Topic-Scout)
+        project_root = Path(__file__).resolve().parent.parent.parent
+        
+        # Create an absolute path to the config file
+        config_file = project_root / config_path
+        
+        self.config_path = config_file
         self._config = self._load_config()
     
     def _load_config(self) -> Dict[str, Any]:

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import './SearchHistory.css';
 
 const SearchHistory = ({ onSearchAgain }) => {
   const [history, setHistory] = useState([]);
@@ -8,12 +9,14 @@ const SearchHistory = ({ onSearchAgain }) => {
 
   useEffect(() => {
     const fetchHistory = async () => {
+      setLoading(true);
       try {
         const response = await axios.get('/api/history');
-        setHistory(response.data);
-        setLoading(false);
-      } catch {
+        setHistory(response.data.history || response.data);
+      } catch (err) {
         setError('Failed to fetch search history.');
+        console.error(err);
+      } finally {
         setLoading(false);
       }
     };
@@ -24,7 +27,7 @@ const SearchHistory = ({ onSearchAgain }) => {
   const handleExport = async (searchId) => {
     try {
       const response = await axios.get(`/api/export/${searchId}`, {
-        responseType: 'blob', // Important for file downloads
+        responseType: 'blob',
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -39,11 +42,11 @@ const SearchHistory = ({ onSearchAgain }) => {
   };
 
   if (loading) {
-    return <div>Loading search history...</div>;
+    return <div className="loading-indicator">Loading history...</div>;
   }
 
   if (error) {
-    return <div>{error}</div>;
+    return <div className="error-message">{error}</div>;
   }
 
   return (
@@ -52,7 +55,7 @@ const SearchHistory = ({ onSearchAgain }) => {
       {history.length === 0 ? (
         <p>No search history found.</p>
       ) : (
-        <table>
+        <table className="search-history-table">
           <thead>
             <tr>
               <th>Query</th>
@@ -62,16 +65,21 @@ const SearchHistory = ({ onSearchAgain }) => {
           </thead>
           <tbody>
             {history.map((search) => (
-              <tr key={search.id}>
-                <td
-                  onClick={() => onSearchAgain(search.query)}
-                  style={{cursor: 'pointer', textDecoration: 'underline'}}
-                >
-                  {search.query}
+              <tr key={search.search_id || search.query}>
+                <td>
+                  <span
+                    className="search-again-link"
+                    onClick={() => onSearchAgain(search.query)}
+                  >
+                    {search.query}
+                  </span>
                 </td>
                 <td>{new Date(search.timestamp).toLocaleDateString()}</td>
                 <td>
-                  <button onClick={() => handleExport(search.id)}>
+                  <button
+                    onClick={() => handleExport(search.search_id)}
+                    className="export-button"
+                  >
                     Export
                   </button>
                 </td>

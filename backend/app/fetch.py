@@ -20,13 +20,14 @@ API_RETRY_DELAY = 1  # seconds
 from . import config
 
 YT_KEY = config.config.get("YOUTUBE_API_KEY")
-if not YT_KEY:
-    raise RuntimeError("Put your YOUTUBE_API_KEY in config.json")
-
-try:
-    yt = build("youtube", "v3", developerKey=YT_KEY)
-except Exception as e:
-    raise RuntimeError(f"Failed to initialize YouTube API: {e}")
+yt = None
+if YT_KEY and YT_KEY != "YOUR_API_KEY_HERE":
+    try:
+        yt = build("youtube", "v3", developerKey=YT_KEY)
+    except Exception as e:
+        print(f"Warning: Failed to initialize YouTube API: {e}")
+else:
+    print("Warning: YOUTUBE_API_KEY not found or is a placeholder. YouTube functionality will be disabled.")
 
 # Cache directories
 RAW = Path("data/raw")
@@ -58,6 +59,10 @@ def _is_cache_valid(cache_file: Path, ttl: int = None) -> bool:
 
 def _make_api_request(func, *args, **kwargs):
     """Make API request with retry logic and exponential backoff."""
+    if not yt:
+        print("YouTube API not initialized, skipping request.")
+        return {"items": []}
+        
     max_attempts = API_RETRY_ATTEMPTS
     base_delay = API_RETRY_DELAY
     
@@ -254,6 +259,7 @@ def fetch_videos(query: str, max_results: int = 10) -> List[Dict]:
                 "title": item["snippet"]["title"],
                 "description": item["snippet"].get("description", ""),
                 "channel": item["snippet"]["channelTitle"],
+                "channel_id": item["snippet"]["channelId"],
                 "url": f"https://www.youtube.com/watch?v={vid}",
                 "transcript": _captions(vid),
                 "comments": _fetch_comments(vid),

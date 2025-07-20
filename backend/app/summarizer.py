@@ -112,7 +112,9 @@ def summarise_video(meta: dict, max_sent: int = 3, max_keywords: int = 5) -> Tup
     Summarizes video content using the abstractive model.
     Note: `max_sent` is no longer directly applicable but the interface is kept.
     """
-    text = " ".join([meta.get("description", ""), meta.get("transcript", "")])
+    description = meta.get("description") or ""
+    transcript = meta.get("transcript") or ""
+    text = " ".join([description, transcript])
     
     # The new summarizer returns a SummaryResult object
     result = summarizer.summarize_text(text, max_keywords=max_keywords)

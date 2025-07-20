@@ -33,12 +33,19 @@ def init_db():
                 video_id TEXT PRIMARY KEY,
                 title TEXT,
                 channel TEXT,
+                channel_id TEXT,
                 url TEXT,
                 description TEXT,
                 transcript TEXT
             )
             """
         )
+        
+        # Schema migration for channel_id
+        c.execute("PRAGMA table_info(videos)")
+        columns = [row[1] for row in c.fetchall()]
+        if "channel_id" not in columns:
+            c.execute("ALTER TABLE videos ADD COLUMN channel_id TEXT")
         
         # Performance indexes
         c.execute("CREATE INDEX IF NOT EXISTS idx_videos_channel ON videos(channel)")
@@ -68,6 +75,32 @@ def init_db():
             );
             """
         )
+
+        # Triggers to keep FTS table in sync with videos table
+        c.execute("""
+            CREATE TRIGGER IF NOT EXISTS videos_ai AFTER INSERT ON videos BEGIN
+                INSERT INTO docs(video_id, text) VALUES (new.video_id, new.title || ' ' || new.description || ' ' || new.transcript);
+            END;
+        """)
+        c.execute("""
+            CREATE TRIGGER IF NOT EXISTS videos_ad AFTER DELETE ON videos BEGIN
+                DELETE FROM docs WHERE video_id = old.video_id;
+            END;
+        """)
+        c.execute("""
+            CREATE TRIGGER IF NOT EXISTS videos_au AFTER UPDATE ON videos BEGIN
+                DELETE FROM docs WHERE video_id = old.video_id;
+                INSERT INTO docs(video_id, text) VALUES (new.video_id, new.title || ' ' || new.description || ' ' || new.transcript);
+            END;
+        """)
+
+        # One-time population of the FTS table for existing data
+        c.execute("""
+            INSERT INTO docs(video_id, text)
+            SELECT video_id, title || ' ' || description || ' ' || transcript
+            FROM videos
+            WHERE video_id NOT IN (SELECT video_id FROM docs);
+        """)
         
         # Table for search history
         c.execute(
@@ -144,6 +177,7 @@ def add_videos(videos: List[Dict]) -> int:
                     v["video_id"],
                     v["title"],
                     v["channel"],
+                    v.get("channel_id", ""),
                     v["url"],
                     v.get("description", ""),
                     v.get("transcript", ""),
@@ -163,9 +197,9 @@ def add_videos(videos: List[Dict]) -> int:
             c.executemany(
                 """
                 INSERT OR IGNORE INTO videos(
-                    video_id, title, channel, url, description, transcript
+                    video_id, title, channel, channel_id, url, description, transcript
                 )
-                VALUES(?, ?, ?, ?, ?, ?)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
                 """,
                 video_data,
             )
@@ -206,12 +240,13 @@ def search(query: str, limit: int = 10) -> List[Dict]:
         # Use FTS5 with highlighting and snippet support
         rows = c.execute(
             """
-            SELECT 
-                v.video_id, 
-                v.title, 
-                v.channel, 
-                v.url, 
-                v.description, 
+            SELECT
+                v.video_id,
+                v.title,
+                v.channel,
+                v.channel_id,
+                v.url,
+                v.description,
                 v.transcript
             FROM docs d
             JOIN videos v ON v.video_id = d.video_id
@@ -222,7 +257,7 @@ def search(query: str, limit: int = 10) -> List[Dict]:
             (query, limit),
         ).fetchall()
         
-        keys = ["video_id", "title", "channel", "url", "description", "transcript"]
+        keys = ["video_id", "title", "channel", "channel_id", "url", "description", "transcript"]
         results = [dict(zip(keys, row)) for row in rows]
         
         return results

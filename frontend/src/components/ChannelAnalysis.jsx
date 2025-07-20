@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './ChannelAnalysis.css';
 
 const ChannelAnalysis = ({ channelId }) => {
     const [analysis, setAnalysis] = useState(null);
@@ -7,6 +8,7 @@ const ChannelAnalysis = ({ channelId }) => {
 
     useEffect(() => {
         if (!channelId) {
+            setAnalysis(null);
             return;
         }
 
@@ -31,15 +33,15 @@ const ChannelAnalysis = ({ channelId }) => {
     }, [channelId]);
 
     if (loading) {
-        return <div>Loading channel analysis...</div>;
+        return <div className="loading-indicator">Loading channel analysis...</div>;
     }
 
     if (error) {
-        return <div>Error: {error}</div>;
+        return <div className="error-message">Error: {error}</div>;
     }
 
     if (!analysis) {
-        return null;
+        return <div>Enter a channel ID to see the analysis.</div>;
     }
 
     const formatDuration = (seconds) => {
@@ -50,35 +52,42 @@ const ChannelAnalysis = ({ channelId }) => {
     };
 
     return (
-        <div>
-            <h2>Channel Analysis for {channelId}</h2>
+        <div className="channel-analysis">
+            <h2>Channel Analysis: <em>{channelId}</em></h2>
             
-            <div>
+            <section>
                 <h3>Most Common Topics</h3>
                 <ul>
-                    {analysis.topics && analysis.topics.map((topic, index) => (
-                        <li key={index}>{topic}</li>
-                    ))}
+                    {analysis.topics && analysis.topics.length > 0 ? (
+                        analysis.topics.map((topic, index) => <li key={index}>{topic}</li>)
+                    ) : (
+                        <li>No topics found.</li>
+                    )}
                 </ul>
-            </div>
+            </section>
 
-            <div>
+            <section>
                 <h3>Average Video Length</h3>
                 <p>{analysis.average_video_length ? formatDuration(analysis.average_video_length) : 'N/A'}</p>
-            </div>
+            </section>
 
-            <div>
+            <section>
                 <h3>Most Viewed Videos</h3>
                 <ul>
-                    {analysis.most_viewed_videos && analysis.most_viewed_videos.map((video) => (
-                        <li key={video.video_id}>
-                            <a href={`https://www.youtube.com/watch?v=${video.video_id}`} target="_blank" rel="noopener noreferrer">
-                                {video.title}
-                            </a> - {video.views.toLocaleString()} views
-                        </li>
-                    ))}
+                    {analysis.most_viewed_videos && analysis.most_viewed_videos.length > 0 ? (
+                        analysis.most_viewed_videos.map((video) => (
+                            <li key={video.video_id}>
+                                <a href={`https://www.youtube.com/watch?v=${video.video_id}`} target="_blank" rel="noopener noreferrer">
+                                    {video.title}
+                                </a>
+                                <span> - {video.views.toLocaleString()} views</span>
+                            </li>
+                        ))
+                    ) : (
+                        <li>No videos found.</li>
+                    )}
                 </ul>
-            </div>
+            </section>
         </div>
     );
 };

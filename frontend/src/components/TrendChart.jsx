@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 const TrendChart = ({ topic }) => {
   const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -32,35 +32,41 @@ const TrendChart = ({ topic }) => {
     fetchData();
   }, [topic]);
 
-  if (!topic) {
-    return <div>Please enter a topic to see the trend.</div>;
-  }
-
   if (loading) {
-    return <div>Loading...</div>;
+    return <div className="loading-indicator">Loading trend data...</div>;
   }
 
   if (error) {
-    return <div>Error: {error.message}</div>;
+    return <div className="error-message">Error: {error.message}</div>;
+  }
+  
+  if (!data || data.length === 0) {
+    return <div>No trend data available for this topic.</div>;
   }
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
+    <ResponsiveContainer width="100%" height={300}>
       <LineChart
         data={data}
         margin={{
           top: 5,
-          right: 30,
-          left: 20,
+          right: 20,
+          left: -10,
           bottom: 5,
         }}
       >
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="date" />
-        <YAxis />
-        <Tooltip />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+        <XAxis dataKey="date" stroke="var(--color-text-secondary)" />
+        <YAxis stroke="var(--color-text-secondary)" />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-border)',
+            borderRadius: 'var(--border-radius-md)',
+          }}
+        />
         <Legend />
-        <Line type="monotone" dataKey="views" stroke="#8884d8" activeDot={{ r: 8 }} />
+        <Line type="monotone" dataKey="views" stroke="var(--color-primary)" strokeWidth={2} activeDot={{ r: 8 }} />
       </LineChart>
     </ResponsiveContainer>
   );
