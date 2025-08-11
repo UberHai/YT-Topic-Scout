@@ -10,14 +10,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled
 
-# Configuration constants
-MAX_RESULTS = 10
-CACHE_TTL = 3600  # seconds
-API_RETRY_ATTEMPTS = 3
-API_RETRY_DELAY = 1  # seconds
-
-# Load API key from config
 from . import config
+from .config import MAX_RESULTS, CACHE_TTL, API_RETRY_ATTEMPTS, API_RETRY_DELAY, BATCH_SIZE
 
 YT_KEY = config.config.get("YOUTUBE_API_KEY")
 yt = None
@@ -129,7 +123,7 @@ def _details(ids: List[str]) -> List[Dict]:
         return []
     
     # Process in batches to avoid API limits
-    batch_size = 50  # YouTube API limit
+    batch_size = BATCH_SIZE or 50  # YouTube API limit
     all_details = []
     
     for i in range(0, len(ids), batch_size):

@@ -28,7 +28,7 @@ An intelligent Python CLI tool for discovering, analyzing, and summarizing YouTu
 - **Comprehensive Logging**: Structured logs with rotation
 - **Rate Limiting**: Smart quota management
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Local Only)
 
 ### Installation
 ```bash
@@ -38,12 +38,13 @@ cd youtube-topic-scout
 
 # Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+.venv\\Scripts\\activate  # Windows PowerShell
+# or: source .venv/bin/activate  # macOS/Linux
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Download NLTK data
+# (Optional) Download NLTK data if needed
 python -m nltk.downloader punkt stopwords averaged_perceptron_tagger
 ```
 
@@ -56,16 +57,18 @@ cp config.example.json config.json
 # Or set environment variable: export YOUTUBE_API_KEY="your-key-here"
 ```
 
-### Usage
+### Run
+Backend (FastAPI):
 ```bash
-# Basic search
-python main.py "machine learning tutorial"
+cd backend
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
 
-# Advanced options
-python main.py "python data science" --max-results 20 --verbose
-
-# Skip saving results
-python main.py "web development" --no-save
+Frontend (Vite):
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ## 📊 Usage Examples
@@ -82,10 +85,8 @@ $ python main.py "deep learning" --max-results 15 --verbose
 
 ### Database Maintenance
 ```bash
-# Show statistics
+cd backend/app
 python optimize.py stats
-
-# Optimize database
 python optimize.py optimize
 ```
 
@@ -249,6 +250,6 @@ python optimize.py optimize
 ```
 
 ### Getting Help
-- Check logs: `tail -f logs/youtube_scout_*.log`
-- Enable verbose mode: `python main.py "query" --verbose`
+- Check logs in `logs/` directory
+- Enable verbose logging in code or via env
 - Open an issue on GitHub

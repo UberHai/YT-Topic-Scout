@@ -2,6 +2,7 @@
 from __future__ import annotations
 import sqlite3
 from pathlib import Path
+from .config import DB_TIMEOUT, MAX_VIDEOS_RETAINED
 from typing import List, Dict, Optional
 from datetime import datetime
 
@@ -11,7 +12,7 @@ _DB = Path("data/videos.db")
 def _conn(timeout: Optional[int] = None):
     """Create database connection with configurable timeout."""
     _DB.parent.mkdir(exist_ok=True)
-    timeout = timeout or 30
+    timeout = timeout or DB_TIMEOUT or 30
     conn = sqlite3.connect(_DB, timeout=timeout)
     conn.row_factory = sqlite3.Row  # Enable column access by name
     conn.execute("PRAGMA journal_mode=WAL")  # Write-ahead logging for better concurrency
@@ -296,7 +297,8 @@ def cleanup_old_videos(days: int = 30) -> int:
     with _conn() as conn:
         c = conn.cursor()
         c.execute(
-            "DELETE FROM videos WHERE rowid IN (SELECT rowid FROM videos ORDER BY rowid DESC LIMIT -1 OFFSET 1000)"
+            "DELETE FROM videos WHERE rowid IN (SELECT rowid FROM videos ORDER BY rowid DESC LIMIT -1 OFFSET ?)",
+            (MAX_VIDEOS_RETAINED,),
         )
         deleted = c.rowcount
         conn.commit()
@@ -309,3 +311,32 @@ def vacuum_db():
     with _conn() as conn:
         conn.execute("VACUUM")
         print("Database vacuumed")
+
+
+def get_latest_stats_for_videos(video_ids: List[str]) -> Dict[str, Dict[str, Optional[int]]]:
+    """Return latest view/like stats for the given video IDs in a single query.
+
+    Keys: video_id -> {"view_count": int | None, "like_count": int | None}
+    """
+    if not video_ids:
+        return {}
+
+    placeholders = ",".join(["?"] * len(video_ids))
+    query = f"""
+        SELECT vs.video_id, vs.view_count, vs.like_count
+        FROM video_stats vs
+        JOIN (
+            SELECT video_id, MAX(fetched_at) AS max_fetched
+            FROM video_stats
+            WHERE video_id IN ({placeholders})
+            GROUP BY video_id
+        ) latest
+          ON latest.video_id = vs.video_id AND latest.max_fetched = vs.fetched_at
+    """
+
+    results: Dict[str, Dict[str, Optional[int]]] = {}
+    with _conn() as conn:
+        rows = conn.execute(query, video_ids).fetchall()
+        for row in rows:
+            results[row[0]] = {"view_count": row[1], "like_count": row[2]}
+    return results

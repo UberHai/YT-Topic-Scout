@@ -9,9 +9,6 @@ from dataclasses import dataclass
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
-from .logger import logger
-
-# Configure logging
 logger = logging.getLogger(__name__)
 
 # Simple regex for word extraction

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import './SearchHistory.css';
 
 const SearchHistory = ({ onSearchAgain }) => {
@@ -11,8 +10,10 @@ const SearchHistory = ({ onSearchAgain }) => {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const response = await axios.get('/api/history');
-        setHistory(response.data.history || response.data);
+        const resp = await fetch('/api/history');
+        if (!resp.ok) throw new Error('Failed to fetch search history.');
+        const data = await resp.json();
+        setHistory(data.history || data);
       } catch (err) {
         setError('Failed to fetch search history.');
         console.error(err);
@@ -26,13 +27,13 @@ const SearchHistory = ({ onSearchAgain }) => {
 
   const handleExport = async (searchId) => {
     try {
-      const response = await axios.get(`/api/export/${searchId}`, {
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const resp = await fetch(`/api/export/${searchId}`);
+      if (!resp.ok) throw new Error('Failed to export search results.');
+      const blob = await resp.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `search-export-${searchId}.csv`);
+      link.setAttribute('download', `search-export-${searchId}.txt`);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);

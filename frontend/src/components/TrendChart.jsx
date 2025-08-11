@@ -16,12 +16,12 @@ const TrendChart = ({ topic }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/trends/${topic}`);
+        const response = await fetch(`/api/trends/${encodeURIComponent(topic)}`);
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
         const result = await response.json();
-        setData(result);
+        setData(Array.isArray(result) ? result : (result?.trend_data || []));
       } catch (error) {
         setError(error);
       } finally {

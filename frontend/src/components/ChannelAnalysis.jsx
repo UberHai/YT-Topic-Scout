@@ -21,7 +21,7 @@ const ChannelAnalysis = ({ channelId }) => {
                     throw new Error('Network response was not ok');
                 }
                 const data = await response.json();
-                setAnalysis(data);
+                setAnalysis(data?.analysis || null);
             } catch (error) {
                 setError(error.message);
             } finally {
@@ -58,8 +58,8 @@ const ChannelAnalysis = ({ channelId }) => {
             <section>
                 <h3>Most Common Topics</h3>
                 <ul>
-                    {analysis.topics && analysis.topics.length > 0 ? (
-                        analysis.topics.map((topic, index) => <li key={index}>{topic}</li>)
+                    {Array.isArray(analysis.most_common_topics) && analysis.most_common_topics.length > 0 ? (
+                        analysis.most_common_topics.map((topic, index) => <li key={index}>{topic}</li>)
                     ) : (
                         <li>No topics found.</li>
                     )}
@@ -68,19 +68,19 @@ const ChannelAnalysis = ({ channelId }) => {
 
             <section>
                 <h3>Average Video Length</h3>
-                <p>{analysis.average_video_length ? formatDuration(analysis.average_video_length) : 'N/A'}</p>
+                <p>{typeof analysis.average_video_length_seconds === 'number' ? formatDuration(analysis.average_video_length_seconds) : 'N/A'}</p>
             </section>
 
             <section>
                 <h3>Most Viewed Videos</h3>
                 <ul>
-                    {analysis.most_viewed_videos && analysis.most_viewed_videos.length > 0 ? (
-                        analysis.most_viewed_videos.map((video) => (
-                            <li key={video.video_id}>
-                                <a href={`https://www.youtube.com/watch?v=${video.video_id}`} target="_blank" rel="noopener noreferrer">
+                    {Array.isArray(analysis.most_viewed_videos) && analysis.most_viewed_videos.length > 0 ? (
+                        analysis.most_viewed_videos.map((video, idx) => (
+                            <li key={idx}>
+                                <a href={video.url} target="_blank" rel="noopener noreferrer">
                                     {video.title}
                                 </a>
-                                <span> - {video.views.toLocaleString()} views</span>
+                                <span> - {Number(video.view_count || 0).toLocaleString()} views</span>
                             </li>
                         ))
                     ) : (

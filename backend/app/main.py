@@ -21,7 +21,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Allows the frontend origin
+    allow_origins=["http://localhost:5173"],  # Local dev frontend origin
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
@@ -72,16 +72,28 @@ async def search_videos(query: str, max_results: Optional[int] = 10):
 
         # 3. Summarize the results
         results = []
+        # Gather latest stats for enrichment
+        try:
+            video_ids = [dict(v).get("video_id") for v in videos]
+            latest_stats = db.get_latest_stats_for_videos(video_ids)
+        except Exception:
+            latest_stats = {}
+
         for vid in videos:
             # Convert sqlite3.Row to a standard dictionary
             vid_dict = dict(vid)
             summary, bullets = summarizer.summarise_video(vid_dict)
+            stats = latest_stats.get(vid_dict.get("video_id"), {})
             results.append(
                 {
                     "title": vid_dict["title"],
                     "channel": vid_dict["channel"],
                     "channel_id": vid_dict.get("channel_id"),
                     "url": vid_dict["url"],
+                    "published_at": vid_dict.get("published_at"),
+                    "duration": vid_dict.get("duration"),
+                    "view_count": stats.get("view_count"),
+                    "like_count": stats.get("like_count"),
                     "summary": summary,
                     "talking_points": bullets,
                 }
