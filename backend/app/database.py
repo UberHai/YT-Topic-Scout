@@ -252,7 +252,7 @@ def search(query: str, limit: int = 10) -> List[Dict]:
             FROM docs d
             JOIN videos v ON v.video_id = d.video_id
             WHERE d.text MATCH ?
-            ORDER BY rank
+            ORDER BY d.rowid
             LIMIT ?
             """,
             (query, limit),

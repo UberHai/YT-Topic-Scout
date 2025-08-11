@@ -12,6 +12,8 @@ from . import topic_modeler
 from .logger import logger
 import re
 from datetime import timedelta
+import json
+from fastapi.responses import StreamingResponse
 
 app = FastAPI(
     title="YouTube Topic-Scout API",
@@ -53,20 +55,20 @@ async def search_videos(query: str, max_results: Optional[int] = 10):
         # 1. Search the local database first
         videos = db.search(query, limit=max_results)
 
-        # 2. If local results are insufficient, fetch from YouTube
+        # 2. If local results are insufficient, fetch from YouTube (progressive enrichment)
         if len(videos) < max_results:
             try:
                 fresh_videos = fetch.fetch_videos(query, max_results=max_results)
                 if fresh_videos:
+                    # Insert immediately so subsequent local searches find them
                     db.add_videos(fresh_videos)
-                    # Combine and de-duplicate results
+                    # Progressive: extend the in-memory list now to render quickly
                     existing_ids = {v['video_id'] for v in videos}
                     new_videos = [v for v in fresh_videos if v['video_id'] not in existing_ids]
                     videos.extend(new_videos)
-                    # Ensure we don't exceed max_results
                     videos = videos[:max_results]
             except fetch.YouTubeAPIError as e:
-                # If API fails but we have some cached results, we can still proceed
+                # If API fails but we have some cached results, proceed with cached
                 if not videos:
                     raise HTTPException(status_code=500, detail=f"YouTube API error: {e}")
 
@@ -198,6 +200,94 @@ def _parse_duration(duration_str: str) -> timedelta:
     
     hours, minutes, seconds = match.groups(default='0')
     return timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds))
+
+
+@app.get("/api/search/stream")
+async def search_videos_stream(query: str, max_results: Optional[int] = 10):
+    """
+    Stream search results as NDJSON for progressive rendering.
+    Each line is a JSON object for a single video; the last line may include {"done": true}.
+    """
+    if not query:
+        raise HTTPException(status_code=400, detail="Query parameter cannot be empty.")
+
+    async def streamer():
+        try:
+            # 1) Try local DB results first for instant response
+            local_results = db.search(query, limit=max_results)
+            for row in local_results:
+                vid_dict = dict(row)
+                summary, bullets = summarizer.summarise_video(vid_dict)
+                payload = {
+                    "title": vid_dict["title"],
+                    "channel": vid_dict["channel"],
+                    "channel_id": vid_dict.get("channel_id"),
+                    "url": vid_dict["url"],
+                    "published_at": vid_dict.get("published_at"),
+                    "duration": vid_dict.get("duration"),
+                    "summary": summary,
+                    "talking_points": bullets,
+                }
+                yield json.dumps(payload) + "\n"
+
+            # 2) If we still need more, progressively fetch from YouTube
+            if len(local_results) < (max_results or 10):
+                try:
+                    ids = fetch._search_ids(query, max_results or 10)
+                    batch_size = min(10, len(ids)) or 10
+                    to_insert = []
+                    sent_ids = {dict(r).get("video_id") for r in local_results}
+
+                    for i in range(0, len(ids), batch_size):
+                        batch_ids = ids[i:i+batch_size]
+                        details = fetch._get_batch_details(batch_ids)
+                        for item in details:
+                            vid = item["id"]
+                            if vid in sent_ids:
+                                continue
+                            data = {
+                                "video_id": vid,
+                                "title": item["snippet"]["title"],
+                                "description": item["snippet"].get("description", ""),
+                                "channel": item["snippet"]["channelTitle"],
+                                "channel_id": item["snippet"].get("channelId"),
+                                "url": f"https://www.youtube.com/watch?v={vid}",
+                                "transcript": fetch._captions(vid),
+                                "published_at": item["snippet"].get("publishedAt", ""),
+                                "duration": item.get("contentDetails", {}).get("duration", ""),
+                            }
+                            summary, bullets = summarizer.summarise_video(data)
+                            payload = {
+                                "title": data["title"],
+                                "channel": data["channel"],
+                                "channel_id": data.get("channel_id"),
+                                "url": data["url"],
+                                "published_at": data.get("published_at"),
+                                "duration": data.get("duration"),
+                                "summary": summary,
+                                "talking_points": bullets,
+                            }
+                            to_insert.append(data)
+                            yield json.dumps(payload) + "\n"
+
+                            if max_results and (len(sent_ids) + len(to_insert)) >= max_results:
+                                break
+
+                        if to_insert:
+                            try:
+                                db.add_videos(to_insert)
+                            except Exception:
+                                pass
+                            to_insert = []
+                        await asyncio.sleep(0)
+                except fetch.YouTubeAPIError:
+                    pass
+        except Exception as e:
+            yield json.dumps({"error": str(e)}) + "\n"
+        finally:
+            yield json.dumps({"done": True}) + "\n"
+
+    return StreamingResponse(streamer(), media_type="application/x-ndjson")
 
 @app.get("/api/channel/{channel_id}")
 async def analyze_channel(channel_id: str):

@@ -11,7 +11,7 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-# Simple regex for word extraction
+# Simple regex for word extraction (letters only)
 WORD_RE = re.compile(r"[A-Za-z']+")
 
 @dataclass
@@ -43,14 +43,22 @@ class Summarizer:
             self.model = None
 
     def _extract_keywords(self, text: str, max_keywords: int = 10) -> List[str]:
-        """A simple keyword extraction method."""
+        """A simple keyword extraction method with URL stripping and extended stopwords."""
         if not text:
             return []
-        # A basic stopword list; can be expanded.
-        stopwords = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"])
+        # Strip URLs/emails
+        text = re.sub(r"https?://\S+", " ", text)
+        text = re.sub(r"www\.\S+", " ", text)
+        text = re.sub(r"\S+@\S+", " ", text)
+        # Extended stopwords including common noise in YouTube content
+        stopwords = set([
+            "i","me","my","myself","we","our","ours","ourselves","you","your","yours","yourself","yourselves","he","him","his","himself","she","her","hers","herself","it","its","itself","they","them","their","theirs","themselves","what","which","who","whom","this","that","these","those","am","is","are","was","were","be","been","being","have","has","had","having","do","does","did","doing","a","an","the","and","but","if","or","because","as","until","while","of","at","by","for","with","about","against","between","into","through","during","before","after","above","below","to","from","up","down","in","out","on","off","over","under","again","further","then","once","here","there","when","where","why","how","all","any","both","each","few","more","most","other","some","such","no","nor","not","only","own","same","so","than","too","very","s","t","can","will","just","don","should","now",
+            # Domain-specific noise
+            "http","https","www","com","net","org","youtube","youtu","video","channel","subscribe","watch","link","click"
+        ])
         words = WORD_RE.findall(text.lower())
-        # Filter out stopwords and short words
-        meaningful_words = [w for w in words if w not in stopwords and len(w) > 2]
+        # Filter out stopwords, short words, and tokens with non-letters
+        meaningful_words = [w for w in words if w not in stopwords and len(w) > 2 and w.isalpha()]
         return [word for word, _ in Counter(meaningful_words).most_common(max_keywords)]
 
     def summarize_text(self, text: str, max_length: int = 150, min_length: int = 40, max_keywords: int = 5) -> SummaryResult:

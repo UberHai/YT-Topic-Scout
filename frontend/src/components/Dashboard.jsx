@@ -30,10 +30,37 @@ const Dashboard = () => {
         setTrendTopic(currentQuery);
         setAnalyzedChannelId('');
         try {
-          const response = await fetch(`/api/search?query=${encodeURIComponent(currentQuery)}`);
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const data = await response.json();
-          setResults(data.results || []);
+          // Try streaming endpoint first for faster perceived load
+          const resp = await fetch(`/api/search/stream?query=${encodeURIComponent(currentQuery)}`);
+          if (resp.ok && resp.headers.get('content-type')?.includes('application/x-ndjson')) {
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            const append = (obj) => setResults((prev) => [...prev, obj]);
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              let idx;
+              while ((idx = buffer.indexOf('\n')) >= 0) {
+                const line = buffer.slice(0, idx).trim();
+                buffer = buffer.slice(idx + 1);
+                if (!line) continue;
+                try {
+                  const obj = JSON.parse(line);
+                  if (obj.done) continue;
+                  if (!obj.title) continue;
+                  append(obj);
+                } catch {}
+              }
+            }
+          } else {
+            // Fallback to non-streaming
+            const response = await fetch(`/api/search?query=${encodeURIComponent(currentQuery)}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            setResults(data.results || []);
+          }
         } catch (e) {
           setError(e.message);
         } finally {

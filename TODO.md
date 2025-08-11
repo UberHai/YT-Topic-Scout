@@ -137,7 +137,7 @@ This checklist is ordered for safe, atomic changes that preserve behavior. Compl
   ```diff
   +MAX_VIDEOS_RETAINED = config.get_int('MAX_VIDEOS_RETAINED', 1000)
   ```
-  2) Use `DB_TIMEOUT` in `_conn` and parameterize retention (database):
+  2) Use `DB_TIMEOUT` in `_conn`GPT54parameterize retention (database):
   ```diff
   +from .config import DB_TIMEOUT
   -    timeout = timeout or 30
